@@ -14,23 +14,28 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-add_executable(nucleo_agent src/nucleo_agent.cpp)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/OdometerData.msg"
+  DEPENDENCIES std_msgs
+)
 
-target_include_directories(nucleo_agent PRIVATE ${UDEV_INCLUDE_DIRS})
-target_link_libraries(nucleo_agent ${UDEV_LIBRARIES})
+add_executable(nucleo_agent_node src/nucleo_agent.cpp)
 
-target_include_directories(nucleo_agent PUBLIC
+target_include_directories(nucleo_agent_node PRIVATE ${UDEV_INCLUDE_DIRS})
+target_link_libraries(nucleo_agent_node ${UDEV_LIBRARIES})
+
+target_include_directories(nucleo_agent_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(nucleo_agent PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+target_compile_features(nucleo_agent_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
-  nucleo_agent
+  nucleo_agent_node
   "rclcpp"
   "std_msgs"
   "rosidl_default_generators"
 )
 
-install(TARGETS nucleo_agent
+install(TARGETS nucleo_agent_node
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
