@@ -9,8 +9,6 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
 
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -18,6 +16,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OdometerData.msg"
   DEPENDENCIES std_msgs
 )
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(nucleo_agent REQUIRED)
 
 add_executable(nucleo_agent_node src/nucleo_agent.cpp)
 
@@ -33,6 +35,7 @@ ament_target_dependencies(
   "rclcpp"
   "std_msgs"
   "rosidl_default_generators"
+  nucleo_agent
 )
 
 install(TARGETS nucleo_agent_node
