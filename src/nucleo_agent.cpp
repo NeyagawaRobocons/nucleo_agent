@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nucleo_agent/msg/odometer_data.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 #include <iostream>
 #include <filesystem>
 #include <thread>
@@ -15,13 +16,26 @@
 
 class SerialPublisherNode : public rclcpp::Node {
 public:
-  SerialPublisherNode() : Node("serial_publisher_node") {
+  SerialPublisherNode() : Node("nucleo_agent") {
+    // トピックの初期化
+    publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
+    motor_subscriber_ = create_subscription<std_msgs::msg::Float32MultiArray>("motor_omini", 10, [this](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+      
+    });
+    RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
+
     std::vector <std::string> devices;
+    int num_devices = 0;
     for(const std::filesystem::directory_entry &i : std::filesystem::recursive_directory_iterator("/dev")){
         if(i.path().filename().string().find("ttyNucleo") != std::string::npos){
             std::cout << "device : "<<i.path().filename().string() << std::endl;
             devices.push_back("/dev/" + i.path().filename().string());
+            num_devices++;
         }
+    }
+    if(num_devices == 0){
+        std::cout << "no device" << std::endl;
+        return ;
     }
     serial_fd = open(devices[0].c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (serial_fd < 0) {
@@ -42,13 +56,10 @@ public:
     tcsetattr( serial_fd, TCSANOW, &tio );     // デバイスに設定を行う
     ioctl(serial_fd, TCSETS, &tio);            // ポートの設定を有効にする
 
-    // トピックの初期化
-    publisher_ = create_publisher<std_msgs::msg::String>("serial_data", 10);
 
     // シリアルポートの読み取りを開始
     startReadingSerial();
-
-    RCLCPP_INFO(this->get_logger(), "SerialPublisherNode started");
+    RCLCPP_INFO(this->get_logger(), "Serial port started");
   }
   private:
   void startReadingSerial() {
@@ -75,11 +86,27 @@ public:
                 std::cout << std::hex << (int)data[i] << " ";
               }
               std::cout << std::endl;
-              RCLCPP_INFO(this->get_logger(), "data len : %d", size);
+              RCLCPP_INFO(this->get_logger(), "data len : %ld", size);
               // 読み取ったデータをトピックにパブリッシュ
-              auto message = std_msgs::msg::String();
-              message.data = std::to_string(size);
-              publisher_->publish(message);
+              if(size == 0 ){
+                continue;
+              }
+              if(data[0] == 0x01 && size == 19){
+                auto message = nucleo_agent::msg::OdometerData();
+                message.set__rotation({
+                  (double)((data[1] << 0) | (data[2] << 8) | (data[3] << 16) | (data[4] << 24)) / 400 * 2 * M_PI,
+                  (double)((data[5] << 0) | (data[6] << 8) | (data[7] << 16) | (data[8] << 24)) / 400 * 2 * M_PI,
+                  (double)((data[9] << 0) | (data[10] << 8) | (data[11] << 16) | (data[12] << 24)) / 400 * 2 * M_PI
+                });
+                message.set__angular_vel({
+                  (double)((data[13] << 0) | (data[15] << 8)) / 16.0 / 400 * 2 * M_PI,
+                  (double)((data[15] << 0) | (data[16] << 8)) / 16.0 / 400 * 2 * M_PI,
+                  (double)((data[17] << 0) | (data[18] << 8)) / 16.0 / 400 * 2 * M_PI
+                });
+                message.header.stamp = this->now();
+                message.header.frame_id = "odom_omni_3wheel";
+                publisher_->publish(message);
+              }
             }
           }
         } else if (len < 0) {
@@ -89,7 +116,8 @@ public:
     });
   }
 
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
+  rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr motor_subscriber_;
   std::thread serial_thread_;
   int serial_fd;
 };
@@ -98,6 +126,7 @@ int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<SerialPublisherNode>();
   rclcpp::spin(node);
+  node.reset();
   rclcpp::shutdown();
   return 0;
 }

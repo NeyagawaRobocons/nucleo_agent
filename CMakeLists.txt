@@ -34,7 +34,6 @@ ament_target_dependencies(
   nucleo_agent_node
   "rclcpp"
   "std_msgs"
-  "rosidl_default_generators"
   nucleo_agent
 )
 

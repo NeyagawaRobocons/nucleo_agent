@@ -10,7 +10,8 @@
                 "/opt/ros/humble/include/**",
                 "/home/tonto/ROS2_ws/src/ros_tutorials/turtlesim/include/**",
                 "/usr/include/**",
-                "${workspaceFolder}/include"
+                "${workspaceFolder}/include",
+                "/home/tonto/ROS2_ws/build/nucleo_agent/rosidl_generator_cpp"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",
