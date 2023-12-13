@@ -1,11 +1,12 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nucleo_agent/msg/odometer_data.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include <iostream>
 #include <filesystem>
 #include <thread>
 #include <vector>
+#include <array>
 #include <string>
 #include <termios.h>
 #include <unistd.h>
@@ -19,9 +20,7 @@ public:
   SerialPublisherNode() : Node("nucleo_agent") {
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
-    motor_subscriber_ = create_subscription<std_msgs::msg::Float32MultiArray>("motor_omini", 10, [this](const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
-      
-    });
+    motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("motor_3omini", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
     RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
 
     std::vector <std::string> devices;
@@ -99,9 +98,9 @@ public:
                   (double)((data[9] << 0) | (data[10] << 8) | (data[11] << 16) | (data[12] << 24)) / 400 * 2 * M_PI
                 });
                 message.set__angular_vel({
-                  (double)((data[13] << 0) | (data[15] << 8)) / 16.0 / 400 * 2 * M_PI,
-                  (double)((data[15] << 0) | (data[16] << 8)) / 16.0 / 400 * 2 * M_PI,
-                  (double)((data[17] << 0) | (data[18] << 8)) / 16.0 / 400 * 2 * M_PI
+                  (double)(int16_t)((data[13] << 0) | (data[14] << 8)) / 400 * 2 * M_PI,
+                  (double)(int16_t)((data[15] << 0) | (data[16] << 8)) / 400 * 2 * M_PI,
+                  (double)(int16_t)((data[17] << 0) | (data[18] << 8)) / 400 * 2 * M_PI
                 });
                 message.header.stamp = this->now();
                 message.header.frame_id = "odom_omni_3wheel";
@@ -115,9 +114,28 @@ public:
       }
     });
   }
+  void motor_3omni_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) const {
+    if(msg->data.size() == 3){
+      std::array<uint8_t, 7> send_data;
+      send_data[0] = 0x01;
+      for (size_t i = 0; i < 3; i++)
+      {
+        int16_t pwm = (int16_t)(msg->data[i] * 0.95* INT16_MAX); 
+        send_data[i*2 +1] = pwm & 0xff;
+        send_data[i*2 +2] = pwm & 0xff;
+      }
+      
+      auto encoded_data = cobs_encode(send_data);
+
+      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+
+    }else{
+      RCLCPP_INFO(this->get_logger(), "invalid motor_3omni message length (must be 3) : %ld", msg->data.size());
+    }
+  }
 
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
-  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr motor_subscriber_;
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr motor_subscriber_;
   std::thread serial_thread_;
   int serial_fd;
 };
