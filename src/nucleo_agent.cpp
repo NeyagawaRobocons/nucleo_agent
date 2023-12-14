@@ -21,6 +21,15 @@ public:
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
     motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("motor_3omini", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
+    // パラメータの初期化
+    this->declare_parameter("gain_motor_3omni", [this]() {
+      std::vector<double> gain;
+      gain.push_back(160.15962547712672);
+      gain.push_back(160.15962547712672);
+      gain.push_back(160.15962547712672);
+      return gain;
+    }()
+    );
     RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
 
     std::vector <std::string> devices;
@@ -80,12 +89,12 @@ public:
               uint8_t data[256];
               size_t size;
               cobs.read(data, &size);
-              for (size_t i = 0; i < size; i++)
-              {
-                std::cout << std::hex << (int)data[i] << " ";
-              }
-              std::cout << std::endl;
-              RCLCPP_INFO(this->get_logger(), "data len : %ld", size);
+              // for (size_t i = 0; i < size; i++)
+              // {
+              //   std::cout << std::hex << (int)data[i] << " ";
+              // }
+              // std::cout << std::endl;
+              // RCLCPP_INFO(this->get_logger(), "data len : %ld", size);
               // 読み取ったデータをトピックにパブリッシュ
               if(size == 0 ){
                 continue;
@@ -120,7 +129,7 @@ public:
       send_data[0] = 0x01;
       for (size_t i = 0; i < 3; i++)
       {
-        int16_t pwm = (int16_t)(msg->data[i] * 0.95* INT16_MAX); 
+        int16_t pwm = (int16_t)(msg->data[i] * 0.95 * INT16_MAX / this->get_parameter("gain_motor_3omni").as_double_array()[i]); 
         send_data[i*2 +1] = pwm & 0xff;
         send_data[i*2 +2] = pwm & 0xff;
       }
@@ -129,6 +138,7 @@ public:
 
       write(this->serial_fd, encoded_data.data(), encoded_data.size());
 
+      RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid motor_3omni message length (must be 3) : %ld", msg->data.size());
     }
