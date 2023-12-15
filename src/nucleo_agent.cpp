@@ -20,7 +20,7 @@ public:
   SerialPublisherNode() : Node("nucleo_agent") {
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
-    motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("motor_3omini", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
+    motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
     // パラメータの初期化
     this->declare_parameter("gain_motor_3omni", [this]() {
       std::vector<double> gain;
@@ -126,12 +126,13 @@ public:
   void motor_3omni_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) const {
     if(msg->data.size() == 3){
       std::array<uint8_t, 7> send_data;
+      int16_t pwm[3];
       send_data[0] = 0x01;
       for (size_t i = 0; i < 3; i++)
       {
-        int16_t pwm = (int16_t)(msg->data[i] * 0.95 * INT16_MAX / this->get_parameter("gain_motor_3omni").as_double_array()[i]); 
-        send_data[i*2 +1] = pwm & 0xff;
-        send_data[i*2 +2] = pwm & 0xff;
+        pwm[i] = (int16_t)(msg->data[i] * 0.95 * INT16_MAX / this->get_parameter("gain_motor_3omni").as_double_array()[i]); 
+        send_data[i*2 +1] = (pwm[i] >> 0) & 0xff;
+        send_data[i*2 +2] = (pwm[i] >> 8) & 0xff;
       }
       
       auto encoded_data = cobs_encode(send_data);
@@ -139,6 +140,14 @@ public:
       write(this->serial_fd, encoded_data.data(), encoded_data.size());
 
       RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
+      // RCLCPP_INFO(this->get_logger(), "mtor pwm sended              : %d, %d, %d", pwm[0], pwm[1], pwm[2]);
+      // RCLCPP_INFO(this->get_logger(), "data sended                  : %d, %d, %d, %d, %d, %d, %d", send_data[0], send_data[1], send_data[2], send_data[3], send_data[4], send_data[5], send_data[6]);
+      // RCLCPP_INFO(this->get_logger(), "data encoded                 : %d, %d, %d, %d, %d, %d, %d, %d, %d", encoded_data[0], encoded_data[1], encoded_data[2], encoded_data[3], encoded_data[4], encoded_data[5], encoded_data[6], encoded_data[7], encoded_data[8]);
+      // std::array<int16_t, 4> md1{0,0,0,0};
+      // for (size_t i = 0; i < 3; i++){
+      //   md1[i] = (int16_t)((send_data[i*2 + 1] << 0) | (send_data[i*2 + 2] << 8));
+      // }
+      // RCLCPP_INFO(this->get_logger(), "mtor pwm decoded             : %d, %d, %d", md1[0], md1[1], md1[2]);
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid motor_3omni message length (must be 3) : %ld", msg->data.size());
     }
