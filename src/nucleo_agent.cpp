@@ -89,31 +89,44 @@ public:
               uint8_t data[256];
               size_t size;
               cobs.read(data, &size);
-              // for (size_t i = 0; i < size; i++)
-              // {
-              //   std::cout << std::hex << (int)data[i] << " ";
-              // }
-              // std::cout << std::endl;
-              // RCLCPP_INFO(this->get_logger(), "data len : %ld", size);
-              // 読み取ったデータをトピックにパブリッシュ
               if(size == 0 ){
                 continue;
               }
-              if(data[0] == 0x01 && size == 19){
+              if(data[0] == 0x01 && size == 25){
                 auto message = nucleo_agent::msg::OdometerData();
-                message.set__rotation({
-                  (double)((data[1] << 0) | (data[2] << 8) | (data[3] << 16) | (data[4] << 24)) / 400 * 2 * M_PI,
-                  (double)((data[5] << 0) | (data[6] << 8) | (data[7] << 16) | (data[8] << 24)) / 400 * 2 * M_PI,
-                  (double)((data[9] << 0) | (data[10] << 8) | (data[11] << 16) | (data[12] << 24)) / 400 * 2 * M_PI
-                });
-                message.set__angular_vel({
-                  (double)(int16_t)((data[13] << 0) | (data[14] << 8)) / 400 * 2 * M_PI,
-                  (double)(int16_t)((data[15] << 0) | (data[16] << 8)) / 400 * 2 * M_PI,
-                  (double)(int16_t)((data[17] << 0) | (data[18] << 8)) / 400 * 2 * M_PI
-                });
+                for (size_t i = 0; i < 3; i++)
+                {
+                  float rotation;
+                  memcpy(&rotation, &data[1 + i * 4], 4);
+                  message.rotation[i] = rotation;
+                }
+                for (size_t i = 0; i < 3; i++)
+                {
+                  float angular_vel;
+                  memcpy(&angular_vel, &data[13 + i * 4], 4);
+                  message.angular_vel[i] = angular_vel;
+                }
+                // message.set__rotation({
+                //   (double)((data[1] << 0) | (data[2] << 8) | (data[3] << 16) | (data[4] << 24)) / 400 * 2 * M_PI,
+                //   (double)((data[5] << 0) | (data[6] << 8) | (data[7] << 16) | (data[8] << 24)) / 400 * 2 * M_PI,
+                //   (double)((data[9] << 0) | (data[10] << 8) | (data[11] << 16) | (data[12] << 24)) / 400 * 2 * M_PI
+                // });
+                // message.set__angular_vel({
+                //   (double)(int16_t)((data[13] << 0) | (data[14] << 8)) / 400 * 2 * M_PI,
+                //   (double)(int16_t)((data[15] << 0) | (data[16] << 8)) / 400 * 2 * M_PI,
+                //   (double)(int16_t)((data[17] << 0) | (data[18] << 8)) / 400 * 2 * M_PI
+                // });
                 message.header.stamp = this->now();
                 message.header.frame_id = "odom_omni_3wheel";
                 publisher_->publish(message);
+                RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
+                RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
+                std::cout << "received : ";
+                for (size_t i = 0; i < size; i++)
+                {
+                  std::cout << std::hex << (int)data[i] << " ";
+                }
+                std::cout << std::endl;
               }
             }
           }
@@ -125,29 +138,20 @@ public:
   }
   void motor_3omni_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg) const {
     if(msg->data.size() == 3){
-      std::array<uint8_t, 7> send_data;
-      int16_t pwm[3];
+      std::array<uint8_t, 13> send_data;
       send_data[0] = 0x01;
       for (size_t i = 0; i < 3; i++)
       {
-        pwm[i] = (int16_t)(msg->data[i] * 0.95 * INT16_MAX / this->get_parameter("gain_motor_3omni").as_double_array()[i]); 
-        send_data[i*2 +1] = (pwm[i] >> 0) & 0xff;
-        send_data[i*2 +2] = (pwm[i] >> 8) & 0xff;
+        // pwm[i] = (int16_t)(msg->data[i] * 0.95 * INT16_MAX / this->get_parameter("gain_motor_3omni").as_double_array()[i]); 
+        float motor_target = msg->data[i];
+        memcpy(&send_data[1 + i * 4], &motor_target, 4);
       }
       
       auto encoded_data = cobs_encode(send_data);
 
       write(this->serial_fd, encoded_data.data(), encoded_data.size());
 
-      RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
-      // RCLCPP_INFO(this->get_logger(), "mtor pwm sended              : %d, %d, %d", pwm[0], pwm[1], pwm[2]);
-      // RCLCPP_INFO(this->get_logger(), "data sended                  : %d, %d, %d, %d, %d, %d, %d", send_data[0], send_data[1], send_data[2], send_data[3], send_data[4], send_data[5], send_data[6]);
-      // RCLCPP_INFO(this->get_logger(), "data encoded                 : %d, %d, %d, %d, %d, %d, %d, %d, %d", encoded_data[0], encoded_data[1], encoded_data[2], encoded_data[3], encoded_data[4], encoded_data[5], encoded_data[6], encoded_data[7], encoded_data[8]);
-      // std::array<int16_t, 4> md1{0,0,0,0};
-      // for (size_t i = 0; i < 3; i++){
-      //   md1[i] = (int16_t)((send_data[i*2 + 1] << 0) | (send_data[i*2 + 2] << 8));
-      // }
-      // RCLCPP_INFO(this->get_logger(), "mtor pwm decoded             : %d, %d, %d", md1[0], md1[1], md1[2]);
+      // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid motor_3omni message length (must be 3) : %ld", msg->data.size());
     }
