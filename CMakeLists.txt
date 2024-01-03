@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nucleo_agent REQUIRED)
+find_package(mecha_control REQUIRED)
 
 add_executable(nucleo_agent_node src/nucleo_agent.cpp)
 
@@ -35,6 +36,7 @@ ament_target_dependencies(
   "rclcpp"
   "std_msgs"
   nucleo_agent
+  mecha_control
 )
 
 install(TARGETS nucleo_agent_node
