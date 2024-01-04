@@ -127,11 +127,11 @@ public:
               }
               if(data[0] == 0x02 && size == 3){
                 auto message = mecha_control::msg::SensorStates();
-                for (size_t i = 0; i < 3; i++)
+                for (size_t i = 0; i < 1; i++)
                 {
                   message.limit_switch_states[i] = (data[1] >> i) & 0x01;
                 }
-                for (size_t i = 0; i < 3; i++)
+                for (size_t i = 0; i < 4; i++)
                 {
                   message.cylinder_states[i] = (data[2] >> i) & 0x01;
                 }
@@ -139,20 +139,16 @@ public:
                 // message.header.frame_id = "daiza_state";
                 daiza_sennsor_pub_->publish(message);
               }
-              if(data[0] == 0x03 && size == 11){
+              if(data[0] == 0x03 && size == 6){
                 auto message = mecha_control::msg::SensorStates();
-                for (size_t i = 0; i < 3; i++)
+                for (size_t i = 0; i < 5; i++)
                 {
                   message.limit_switch_states[i] = (data[1] >> i) & 0x01;
                 }
-                for (size_t i = 0; i < 3; i++)
-                {
-                  message.cylinder_states[i] = (data[2] >> i) & 0x01;
-                }
-                for (size_t i = 0; i < 2; i++)
+                for (size_t i = 0; i < 1; i++)
                 {
                   float potentiometer_angles;
-                  memcpy(&potentiometer_angles, &data[3 + i * 4], 4);
+                  memcpy(&potentiometer_angles, &data[2 + i * 4], 4);
                   message.potentiometer_angles[i] = potentiometer_angles;
                 }
                 // message.header.stamp = this->now();
@@ -188,15 +184,15 @@ public:
     }
   }
   void daiza_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
-    if(msg->cylinder_states.size()==3 && msg->motor_positions.size()==1){
-      std::array<uint8_t, 6> send_data;
+    if(msg->cylinder_states.size()==4 && msg->motor_expand.size()==0 && msg->motor_positions.size()==0){
+      std::array<uint8_t, 2> send_data;
       send_data[0] = 0x02;
       send_data[1] = 0x00;
-      for (size_t i = 0; i < 3; i++)
+      for (size_t i = 0; i < 4; i++)
       {
         send_data[1] = send_data[1] & ((uint8_t)(msg->cylinder_states[i]) << i);
       }
-      for (size_t i = 0; i < 1; i++)
+      for (size_t i = 0; i < 0; i++)
       {
         float motor_positions = msg->motor_positions[i];
         memcpy(&send_data[1 + 1 + i * 4], &motor_positions, 4);
@@ -206,29 +202,29 @@ public:
 
       write(this->serial_fd, encoded_data.data(), encoded_data.size());
     }else{
-      RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 3, 1) : %ld, %ld", msg->cylinder_states.size(), msg->motor_positions.size());
+      RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 4, 0, 0) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
   }
   void hina_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
-    if(msg->cylinder_states.size()==2 && msg->motor_positions.size()==2){
-      std::array<uint8_t, 10> send_data;
+    if(msg->cylinder_states.size()==0 && msg->motor_expand.size()==1 && msg->motor_positions.size()==1){
+      std::array<uint8_t, 6> send_data;
       send_data[0] = 0x03;
       send_data[1] = 0x00;
-      for (size_t i = 0; i < 3; i++)
+      for (size_t i = 0; i < 1; i++)
       {
-        send_data[1] = send_data[1] & ((uint8_t)(msg->cylinder_states[i]) << i);
+        send_data[1] = send_data[1] & ((uint8_t)(msg->motor_expand[i]) << i);
       }
       for (size_t i = 0; i < 1; i++)
       {
         float motor_positions = msg->motor_positions[i];
-        memcpy(&send_data[1 + 1 + i * 4], &motor_positions, 4);
+        memcpy(&send_data[2 + i * 4], &motor_positions, 4);
       }
       
       auto encoded_data = cobs_encode(send_data);
 
       write(this->serial_fd, encoded_data.data(), encoded_data.size());
     }else{
-      RCLCPP_INFO(this->get_logger(), "invalid hina_dastpan message length (must be 2, 2) : %ld, %ld", msg->cylinder_states.size(), msg->motor_positions.size());
+      RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 0, 1, 1) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
   }
 
