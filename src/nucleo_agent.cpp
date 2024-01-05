@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <mutex>
 
 #include "bfcobs.hpp"
 
@@ -99,7 +100,8 @@ public:
               if(size == 0 ){
                 continue;
               }
-              if(data[0] == 0x01 && size == 25){
+              if(size == 25)if(data[0] == 0x01){
+                RCLCPP_INFO(this->get_logger(), "OdometerData received");
                 auto message = nucleo_agent::msg::OdometerData();
                 for (size_t i = 0; i < 3; i++)
                 {
@@ -116,17 +118,14 @@ public:
                 message.header.stamp = this->now();
                 message.header.frame_id = "odom_omni_3wheel";
                 publisher_->publish(message);
-                RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
-                RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
-                std::cout << "received : ";
-                for (size_t i = 0; i < size; i++)
-                {
-                  std::cout << std::hex << (int)data[i] << " ";
-                }
-                std::cout << std::endl;
+                // RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
+                // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
               }
-              if(data[0] == 0x02 && size == 3){
+              if(size == 3)if(data[0] == 0x02){
+                RCLCPP_INFO(this->get_logger(), "daiza_state received");
                 auto message = mecha_control::msg::SensorStates();
+                message.limit_switch_states.resize(1, false);
+                message.cylinder_states.resize(4, false);
                 for (size_t i = 0; i < 1; i++)
                 {
                   message.limit_switch_states[i] = (data[1] >> i) & 0x01;
@@ -139,8 +138,11 @@ public:
                 // message.header.frame_id = "daiza_state";
                 daiza_sennsor_pub_->publish(message);
               }
-              if(data[0] == 0x03 && size == 6){
+              if(size == 6)if(data[0] == 0x03){
+                RCLCPP_INFO(this->get_logger(), "hina_state received");
                 auto message = mecha_control::msg::SensorStates();
+                message.limit_switch_states.resize(5, false);
+                message.potentiometer_angles.resize(1, 0.0);
                 for (size_t i = 0; i < 5; i++)
                 {
                   message.limit_switch_states[i] = (data[1] >> i) & 0x01;
@@ -153,7 +155,7 @@ public:
                 }
                 // message.header.stamp = this->now();
                 // message.header.frame_id = "hina_state";
-                daiza_sennsor_pub_->publish(message);
+                hina_sennsor_pub_->publish(message);
               }
             }
           }
@@ -176,7 +178,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -185,22 +187,30 @@ public:
   }
   void daiza_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
     if(msg->cylinder_states.size()==4 && msg->motor_expand.size()==0 && msg->motor_positions.size()==0){
+      // RCLCPP_INFO(this->get_logger(), "daiza_clamp message received");
       std::array<uint8_t, 2> send_data;
       send_data[0] = 0x02;
       send_data[1] = 0x00;
       for (size_t i = 0; i < 4; i++)
       {
-        send_data[1] = send_data[1] & ((uint8_t)(msg->cylinder_states[i]) << i);
+        send_data[1] |= (uint8_t)(msg->cylinder_states[i]) << i;
       }
       for (size_t i = 0; i < 0; i++)
       {
         float motor_positions = msg->motor_positions[i];
         memcpy(&send_data[1 + 1 + i * 4], &motor_positions, 4);
       }
+
+      // std::cout << "send_data : ";
+      // for (size_t i = 0; i < send_data.size(); i++)
+      // {
+      //   std::cout << std::hex << (int)send_data[i] << ", ";
+      // }
+      // std::cout << std::endl;
       
       auto encoded_data = cobs_encode(send_data);
 
-      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      RCLCPP_INFO(this->get_logger(), "daiza write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 4, 0, 0) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
@@ -222,7 +232,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 0, 1, 1) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
@@ -236,6 +246,7 @@ public:
   rclcpp::Publisher<mecha_control::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
   std::thread serial_thread_;
   int serial_fd;
+  std::mutex serial_mutex;
 };
 
 int main(int argc, char *argv[]) {
