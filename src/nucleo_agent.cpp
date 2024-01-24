@@ -195,11 +195,16 @@ public:
       {
         send_data[1] |= (uint8_t)(msg->cylinder_states[i]) << i;
       }
-      for (size_t i = 0; i < 0; i++)
-      {
-        float motor_positions = msg->motor_positions[i];
-        memcpy(&send_data[1 + 1 + i * 4], &motor_positions, 4);
+
+      bool is_data_change = false;
+      for (size_t i = 0; i < send_data.size(); i++){
+        if(send_data[i] != daiza_last_send_data[i]){
+          daiza_last_send_data[i] = send_data[i];
+          std::cout << "data change at" << i << std::endl;
+          is_data_change = true;
+        }
       }
+      if(is_data_change == false) { return;}
 
       // std::cout << "send_data : ";
       // for (size_t i = 0; i < send_data.size(); i++)
@@ -229,6 +234,14 @@ public:
         float motor_positions = msg->motor_positions[i];
         memcpy(&send_data[2 + i * 4], &motor_positions, 4);
       }
+      bool is_data_change = false;
+      for (size_t i = 0; i < send_data.size(); i++){
+        if(send_data[i] != hina_last_send_data[i]){
+          hina_last_send_data[i] = send_data[i];
+          is_data_change = true;
+        }
+      }
+      if(is_data_change == false) return;
       
       auto encoded_data = cobs_encode(send_data);
 
@@ -246,7 +259,8 @@ public:
   rclcpp::Publisher<mecha_control::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
   std::thread serial_thread_;
   int serial_fd;
-  std::mutex serial_mutex;
+  mutable std::array<uint8_t, 2> daiza_last_send_data;
+  mutable std::array<uint8_t, 6> hina_last_send_data;
 };
 
 int main(int argc, char *argv[]) {
