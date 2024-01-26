@@ -178,7 +178,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      // RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -221,15 +221,15 @@ public:
     }
   }
   void hina_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
-    if(msg->cylinder_states.size()==0 && msg->motor_expand.size()==1 && msg->motor_positions.size()==1){
-      std::array<uint8_t, 6> send_data;
+    if(msg->cylinder_states.size()==0 && msg->motor_expand.size()==1 && msg->motor_positions.size()==3){
+      std::array<uint8_t, 14> send_data;
       send_data[0] = 0x03;
       send_data[1] = 0x00;
       for (size_t i = 0; i < 1; i++)
       {
         send_data[1] = send_data[1] & ((uint8_t)(msg->motor_expand[i]) << i);
       }
-      for (size_t i = 0; i < 1; i++)
+      for (size_t i = 0; i < 3; i++)
       {
         float motor_positions = msg->motor_positions[i];
         memcpy(&send_data[2 + i * 4], &motor_positions, 4);
@@ -247,7 +247,7 @@ public:
 
       RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
     }else{
-      RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 0, 1, 1) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
+      RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 0, 1, 3) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
   }
 
