@@ -101,7 +101,7 @@ public:
                 continue;
               }
               if(size == 25)if(data[0] == 0x01){
-                RCLCPP_INFO(this->get_logger(), "OdometerData received");
+                // RCLCPP_INFO(this->get_logger(), "OdometerData received");
                 auto message = nucleo_agent::msg::OdometerData();
                 for (size_t i = 0; i < 3; i++)
                 {
@@ -122,7 +122,7 @@ public:
                 // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
               }
               if(size == 3)if(data[0] == 0x02){
-                RCLCPP_INFO(this->get_logger(), "daiza_state received");
+                // RCLCPP_INFO(this->get_logger(), "daiza_state received");
                 auto message = mecha_control::msg::SensorStates();
                 message.limit_switch_states.resize(1, false);
                 message.cylinder_states.resize(4, false);
@@ -139,7 +139,7 @@ public:
                 daiza_sennsor_pub_->publish(message);
               }
               if(size == 6)if(data[0] == 0x03){
-                RCLCPP_INFO(this->get_logger(), "hina_state received");
+                // RCLCPP_INFO(this->get_logger(), "hina_state received");
                 auto message = mecha_control::msg::SensorStates();
                 message.limit_switch_states.resize(5, false);
                 message.potentiometer_angles.resize(1, 0.0);
@@ -206,12 +206,12 @@ public:
       }
       if(is_data_change == false) { return;}
 
-      // std::cout << "send_data : ";
-      // for (size_t i = 0; i < send_data.size(); i++)
-      // {
-      //   std::cout << std::hex << (int)send_data[i] << ", ";
-      // }
-      // std::cout << std::endl;
+      std::cout << "send_data : ";
+      for (size_t i = 0; i < send_data.size(); i++)
+      {
+        std::cout << std::hex << (int)send_data[i] << ", ";
+      }
+      std::cout << std::endl;
       
       auto encoded_data = cobs_encode(send_data);
 
