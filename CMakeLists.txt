@@ -22,6 +22,7 @@ find_package(rclcpp REQUIRED)
 find_package(nucleo_agent REQUIRED)
 find_package(mecha_control REQUIRED)
 
+# build nucleo_agent_node
 add_executable(nucleo_agent_node src/nucleo_agent.cpp)
 
 target_include_directories(nucleo_agent_node PRIVATE ${UDEV_INCLUDE_DIRS})
@@ -40,6 +41,27 @@ ament_target_dependencies(
 )
 
 install(TARGETS nucleo_agent_node
+  DESTINATION lib/${PROJECT_NAME})
+
+# build rp_encoder_agent_node
+add_executable(rp_encoder_agent_node src/rp_encoder_agent.cpp)
+
+target_include_directories(rp_encoder_agent_node PRIVATE ${UDEV_INCLUDE_DIRS})
+target_link_libraries(rp_encoder_agent_node ${UDEV_LIBRARIES})
+
+target_include_directories(rp_encoder_agent_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(rp_encoder_agent_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+ament_target_dependencies(
+  rp_encoder_agent_node
+  "rclcpp"
+  "std_msgs"
+  nucleo_agent
+  mecha_control
+)
+
+install(TARGETS rp_encoder_agent_node
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
