@@ -30,8 +30,9 @@ public:
     hina_cmd_sub_ = create_subscription<mecha_control::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
     hina_sennsor_pub_ = create_publisher<mecha_control::msg::SensorStates>("hina_state", 10);
     // パラメータの初期化
-    this->declare_parameter("gain_motor_3omni", [this]() {
+    this->declare_parameter("gain_motor_4omni", [this]() {
       std::vector<double> gain;
+      gain.push_back(160.15962547712672);
       gain.push_back(160.15962547712672);
       gain.push_back(160.15962547712672);
       gain.push_back(160.15962547712672);
