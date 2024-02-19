@@ -23,7 +23,7 @@ class SerialPublisherNode : public rclcpp::Node {
 public:
   SerialPublisherNode() : Node("nucleo_agent") {
     // トピックの初期化
-    publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
+    publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("motor_speed", 10);
     motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
     daiza_cmd_sub_ = create_subscription<mecha_control::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
     daiza_sennsor_pub_ = create_publisher<mecha_control::msg::SensorStates>("daiza_state", 10);
