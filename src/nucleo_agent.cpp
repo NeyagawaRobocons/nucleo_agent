@@ -117,7 +117,7 @@ public:
                   message.angular_vel[i] = angular_vel;
                 }
                 message.header.stamp = this->now();
-                message.header.frame_id = "odom_omni_3wheel";
+                message.header.frame_id = "omni_4wheel";
                 publisher_->publish(message);
                 // RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
                 // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
