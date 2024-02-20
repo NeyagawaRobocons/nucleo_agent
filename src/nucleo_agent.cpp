@@ -158,8 +158,11 @@ public:
                 // message.header.frame_id = "hina_state";
                 hina_sennsor_pub_->publish(message);
               }
-              if(size == 6) if(data[0] == 0xff){
-                RCLCPP_INFO(this->get_logger(), "debug cyl states: %d, %d, %d, %d    debug num data: %d", data[1], data[2], data[3], data[4], data[5]);
+              if(size == 5) if(data[0] == 0xff){
+                int16_t motor_outputs[2];
+                memcpy(&motor_outputs[0], &data[1], 2);
+                memcpy(&motor_outputs[1], &data[3], 2);
+                RCLCPP_INFO(this->get_logger(), "motors: %d, %d", motor_outputs[0], motor_outputs[1]);
               }
             }
           }
@@ -202,7 +205,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      // RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -257,12 +260,12 @@ public:
       send_data[1] = 0x00;
       for (size_t i = 0; i < 1; i++)
       {
-        send_data[1] = send_data[1] & ((uint8_t)(msg->motor_expand[i]) << i);
+        send_data[1] |= ((uint8_t)(msg->motor_expand[i]) << i);
       }
       send_data[2] = 0x00;
       for (size_t i = 0; i < 2; i++)
       {
-        send_data[2] = send_data[2] & ((uint8_t)(msg->motor_expand[i]) << i);
+        send_data[2] |= ((uint8_t)(msg->cylinder_states[i]) << i);
       }
       for (size_t i = 0; i < 3; i++)
       {
@@ -276,12 +279,13 @@ public:
           is_data_change = true;
         }
       }
-      RCLCPP_INFO(this->get_logger(), "hina : %d, %d, %d, %d    changed : %d", send_data[0], send_data[1], send_data[2], send_data[3], is_data_change);
+      // RCLCPP_INFO(this->get_logger(), "hina : %d, %d, %d, %d    changed : %d", send_data[0], send_data[1], send_data[2], send_data[3], is_data_change);
       if(is_data_change == false) return;
       
       auto encoded_data = cobs_encode(send_data);
 
       RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size())); 
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 2, 1, 3) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
