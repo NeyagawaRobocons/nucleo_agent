@@ -6,9 +6,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(mecha_control REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
-
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -17,26 +19,20 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES std_msgs
 )
 
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(nucleo_agent REQUIRED)
-find_package(mecha_control REQUIRED)
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 # build nucleo_agent_node
 add_executable(nucleo_agent_node src/nucleo_agent.cpp)
 
 target_include_directories(nucleo_agent_node PRIVATE ${UDEV_INCLUDE_DIRS})
 target_link_libraries(nucleo_agent_node ${UDEV_LIBRARIES})
+target_link_libraries(nucleo_agent_node "${cpp_typesupport_target}")
 
-target_include_directories(nucleo_agent_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
 target_compile_features(nucleo_agent_node PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
   nucleo_agent_node
   "rclcpp"
   "std_msgs"
-  nucleo_agent
   mecha_control
 )
 
@@ -48,6 +44,7 @@ add_executable(rp_encoder_agent_node src/rp_encoder_agent.cpp)
 
 target_include_directories(rp_encoder_agent_node PRIVATE ${UDEV_INCLUDE_DIRS})
 target_link_libraries(rp_encoder_agent_node ${UDEV_LIBRARIES})
+target_link_libraries(rp_encoder_agent_node "${cpp_typesupport_target}")
 
 target_include_directories(rp_encoder_agent_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -57,12 +54,12 @@ ament_target_dependencies(
   rp_encoder_agent_node
   "rclcpp"
   "std_msgs"
-  nucleo_agent
   mecha_control
 )
 
 install(TARGETS rp_encoder_agent_node
   DESTINATION lib/${PROJECT_NAME})
+  
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
