@@ -139,19 +139,24 @@ public:
                 // message.header.frame_id = "daiza_state";
                 daiza_sennsor_pub_->publish(message);
               }
-              if(size == 6)if(data[0] == 0x03){
+              if(size == 7)if(data[0] == 0x03){
                 // RCLCPP_INFO(this->get_logger(), "hina_state received");
                 auto message = mecha_control::msg::SensorStates();
                 message.limit_switch_states.resize(5, false);
+                message.cylinder_states.resize(2, false);
                 message.potentiometer_angles.resize(1, 0.0);
                 for (size_t i = 0; i < 5; i++)
                 {
                   message.limit_switch_states[i] = (data[1] >> i) & 0x01;
                 }
+                for (size_t i = 0; i < 2; i++)
+                {
+                  message.cylinder_states[i] = (data[2] >> i) & 0x01;
+                }
                 for (size_t i = 0; i < 1; i++)
                 {
                   float potentiometer_angles;
-                  memcpy(&potentiometer_angles, &data[2 + i * 4], 4);
+                  memcpy(&potentiometer_angles, &data[3 + i * 4], 4);
                   message.potentiometer_angles[i] = potentiometer_angles;
                 }
                 // message.header.stamp = this->now();
