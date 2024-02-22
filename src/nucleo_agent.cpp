@@ -17,7 +17,7 @@
 #include <fcntl.h>
 #include <mutex>
 
-#include "bfcobs.hpp"
+#include "bfcobs2.hpp"
 
 class SerialPublisherNode : public rclcpp::Node {
 public:

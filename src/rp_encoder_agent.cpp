@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <math.h>
 
-#include "bfcobs.hpp"
+#include "bfcobs2.hpp"
 
 class SerialPublisherNode : public rclcpp::Node {
 public:
