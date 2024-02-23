@@ -1,0 +1,23 @@
+
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  CI_check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: pull container
+        run: |
+          docker pull ghcr.io/neyagawarobocons/robo_env_container:latest
+      - name: colcon build
+        run: |
+          docker run --workdir=/ROS_ws \
+          --volume=.:/ROS_ws/src/mecha_control ghcr.io/neyagawarobocons/robo_env_container:latest \
+          bash -c ". /opt/ros/humble/setup.bash \
+          && git clone https://github.com/NeyagawaRobocons/mecha_control src/ \
+          && colcon build"
