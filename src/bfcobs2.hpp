@@ -25,6 +25,7 @@ public:
         if(data == 0){
             buffer[write_index] = 0;
             write_index++;
+            if(write_index == BUFFER_SIZE) write_index = 0;
             data_length++;
             packet_num++;
             return packet_num;
@@ -33,11 +34,9 @@ public:
         }else{
             buffer[write_index] = data;
             write_index++;
+            if(write_index == BUFFER_SIZE) write_index = 0;
             data_length++;
             return packet_num;
-        }
-        if(write_index == BUFFER_SIZE){
-            write_index = 0;
         }
     }
     // if return == 0, data packet is not ready
