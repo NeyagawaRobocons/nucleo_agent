@@ -17,6 +17,7 @@
 #include <mutex>
 
 #include "bfcobs2.hpp"
+#include "scheduler.hpp"
 
 class SerialPublisherNode : public rclcpp::Node {
 public:
@@ -38,6 +39,10 @@ public:
       return gain;
     }()
     );
+    this->declare_parameter("rate_limit_motor_speed", 0.01);
+    this->declare_parameter("rate_limit_daiza_state", 0.03);
+    this->declare_parameter("rate_limit_hina_state", 0.03);
+
     RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
 
     std::vector <std::string> devices;
@@ -81,6 +86,9 @@ public:
   void startReadingSerial() {
     // 非同期にシリアルポートの読み取りを行う
     serial_thread_ = std::thread([this]() {
+      Scheduler motor_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_motor_speed").as_double() * 1e9));
+      Scheduler daiza_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_daiza_state").as_double() * 1e9));
+      Scheduler hina_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_hina_state").as_double() * 1e9));
       int count = 0;
       bfcobs<256> cobs;
       // clear read buffer
@@ -100,7 +108,7 @@ public:
               if(size == 0 ){
                 continue;
               }
-              if(size == 25)if(data[0] == 0x01){
+              if(size == 25)if(data[0] == 0x01)if(motor_pub_scheduler.process()){
                 // RCLCPP_INFO(this->get_logger(), "OdometerData received");
                 auto message = nucleo_agent::msg::OdometerData();
                 for (size_t i = 0; i < 3; i++)
@@ -121,7 +129,7 @@ public:
                 // RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
                 // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
               }
-              if(size == 3)if(data[0] == 0x02){
+              if(size == 3)if(data[0] == 0x02)if(daiza_pub_scheduler.process()){
                 // RCLCPP_INFO(this->get_logger(), "daiza_state received");
                 auto message = nucleo_agent::msg::SensorStates();
                 message.limit_switch_states.resize(1, false);
@@ -138,7 +146,7 @@ public:
                 // message.header.frame_id = "daiza_state";
                 daiza_sennsor_pub_->publish(message);
               }
-              if(size == 7)if(data[0] == 0x03){
+              if(size == 7)if(data[0] == 0x03)if(hina_pub_scheduler.process()){
                 // RCLCPP_INFO(this->get_logger(), "hina_state received");
                 auto message = nucleo_agent::msg::SensorStates();
                 message.limit_switch_states.resize(5, false);
@@ -166,7 +174,7 @@ public:
                 int16_t motor_outputs[2];
                 memcpy(&motor_outputs[0], &data[1], 2);
                 memcpy(&motor_outputs[1], &data[3], 2);
-                RCLCPP_INFO(this->get_logger(), "motors: %d, %d", motor_outputs[0], motor_outputs[1]);
+                // RCLCPP_INFO(this->get_logger(), "motors: %d, %d", motor_outputs[0], motor_outputs[1]);
               }
             }
           }
@@ -189,7 +197,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      // RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -209,7 +217,7 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "motor write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -231,28 +239,28 @@ public:
       for (size_t i = 0; i < send_data.size(); i++){
         if(send_data[i] != daiza_last_send_data[i]){
           daiza_last_send_data[i] = send_data[i];
-          std::cout << "data change at" << i << std::endl;
+          // std::cout << "data change at" << i << std::endl;
           is_data_change = true;
         }
       }
       if(is_data_change == false) { return;}
 
-      std::cout << "send_data : ";
+      // std::cout << "send_data : ";
       // for (size_t i = 0; i < send_data.size(); i++)
       // {
       //   std::cout << std::hex << (int)send_data[i] << ", ";
       // }
 
-      for (size_t i = 0; i < 4; i++)
-      {
-        std::cout << std::hex << (int)((send_data[1] >> i) & 0x01) << ", ";
-      }
-      std::cout << std::endl;
+      // for (size_t i = 0; i < 4; i++)
+      // {
+      //   std::cout << std::hex << (int)((send_data[1] >> i) & 0x01) << ", ";
+      // }
+      // std::cout << std::endl;
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "daiza write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
-      RCLCPP_INFO(this->get_logger(), "daiza write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "daiza write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "daiza write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 4, 0, 0) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
@@ -288,8 +296,8 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
-      RCLCPP_INFO(this->get_logger(), "hina write return : %d", write(this->serial_fd, encoded_data.data(), encoded_data.size())); 
+      RCLCPP_INFO(this->get_logger(), "hina write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      RCLCPP_INFO(this->get_logger(), "hina write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size())); 
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 2, 1, 3) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
