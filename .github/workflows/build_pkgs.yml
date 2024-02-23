@@ -20,3 +20,20 @@ jobs:
           --volume=.:/ROS_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
           bash -c ". /opt/ros/humble/setup.bash \
           && colcon build"
+  build_deb_pkg:
+    needs: CI_check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: pull container
+        run: |
+          docker pull ghcr.io/neyagawarobocons/robo_env_container:latest
+      - name: colcon build
+        run: |
+          docker run --workdir=/ROS_ws \
+          --volume=.:/ROS_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
+          bash -c ". /opt/ros/humble/setup.bash \
+          && cd /ROS_ws/src/nucleo_agent \
+          && bloom-generate rosdebian \
+          && fakeroot debian/rules binary"
