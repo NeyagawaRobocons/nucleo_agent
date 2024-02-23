@@ -1,8 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nucleo_agent/msg/odometer_data.hpp"
-#include "mecha_control/msg/actuator_commands.hpp"
-#include "mecha_control/msg/mecha_state.hpp"
-#include "mecha_control/msg/sensor_states.hpp"
+#include "nucleo_agent/msg/actuator_commands.hpp"
+#include "nucleo_agent/msg/sensor_states.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include <iostream>
@@ -25,10 +24,10 @@ public:
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("motor_speed", 10);
     motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
-    daiza_cmd_sub_ = create_subscription<mecha_control::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
-    daiza_sennsor_pub_ = create_publisher<mecha_control::msg::SensorStates>("daiza_state", 10);
-    hina_cmd_sub_ = create_subscription<mecha_control::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
-    hina_sennsor_pub_ = create_publisher<mecha_control::msg::SensorStates>("hina_state", 10);
+    daiza_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
+    daiza_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("daiza_state", 10);
+    hina_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
+    hina_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("hina_state", 10);
     // パラメータの初期化
     this->declare_parameter("gain_motor_4omni", [this]() {
       std::vector<double> gain;
@@ -124,7 +123,7 @@ public:
               }
               if(size == 3)if(data[0] == 0x02){
                 // RCLCPP_INFO(this->get_logger(), "daiza_state received");
-                auto message = mecha_control::msg::SensorStates();
+                auto message = nucleo_agent::msg::SensorStates();
                 message.limit_switch_states.resize(1, false);
                 message.cylinder_states.resize(4, false);
                 for (size_t i = 0; i < 1; i++)
@@ -141,7 +140,7 @@ public:
               }
               if(size == 7)if(data[0] == 0x03){
                 // RCLCPP_INFO(this->get_logger(), "hina_state received");
-                auto message = mecha_control::msg::SensorStates();
+                auto message = nucleo_agent::msg::SensorStates();
                 message.limit_switch_states.resize(5, false);
                 message.cylinder_states.resize(2, false);
                 message.potentiometer_angles.resize(1, 0.0);
@@ -217,7 +216,7 @@ public:
       RCLCPP_INFO(this->get_logger(), "invalid motor_3omni message length (must be 4) : %ld", msg->data.size());
     }
   }
-  void daiza_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
+  void daiza_cmd_callback(const nucleo_agent::msg::ActuatorCommands::SharedPtr msg) const {
     if(msg->cylinder_states.size()==4 && msg->motor_expand.size()==0 && msg->motor_positions.size()==0){
       // RCLCPP_INFO(this->get_logger(), "daiza_clamp message received");
       std::array<uint8_t, 2> send_data;
@@ -258,7 +257,7 @@ public:
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 4, 0, 0) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
   }
-  void hina_cmd_callback(const mecha_control::msg::ActuatorCommands::SharedPtr msg) const {
+  void hina_cmd_callback(const nucleo_agent::msg::ActuatorCommands::SharedPtr msg) const {
     if(msg->cylinder_states.size()==2 && msg->motor_expand.size()==1 && msg->motor_positions.size()==3){
       std::array<uint8_t, 15> send_data;
       send_data[0] = 0x03;
@@ -298,10 +297,10 @@ public:
 
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr motor_subscriber_;
-  rclcpp::Subscription<mecha_control::msg::ActuatorCommands>::SharedPtr daiza_cmd_sub_;
-  rclcpp::Publisher<mecha_control::msg::SensorStates>::SharedPtr daiza_sennsor_pub_;
-  rclcpp::Subscription<mecha_control::msg::ActuatorCommands>::SharedPtr hina_cmd_sub_;
-  rclcpp::Publisher<mecha_control::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
+  rclcpp::Subscription<nucleo_agent::msg::ActuatorCommands>::SharedPtr daiza_cmd_sub_;
+  rclcpp::Publisher<nucleo_agent::msg::SensorStates>::SharedPtr daiza_sennsor_pub_;
+  rclcpp::Subscription<nucleo_agent::msg::ActuatorCommands>::SharedPtr hina_cmd_sub_;
+  rclcpp::Publisher<nucleo_agent::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
   std::thread serial_thread_;
   int serial_fd;
   mutable std::array<uint8_t, 2> daiza_last_send_data;

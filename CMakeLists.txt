@@ -8,7 +8,6 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(mecha_control REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UDEV REQUIRED libudev)
 find_package(std_msgs REQUIRED)
@@ -16,6 +15,8 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OdometerData.msg"
+  "msg/ActuatorCommands.msg"
+  "msg/SensorStates.msg"
   DEPENDENCIES std_msgs
 )
 
@@ -33,7 +34,6 @@ ament_target_dependencies(
   nucleo_agent_node
   "rclcpp"
   "std_msgs"
-  mecha_control
 )
 
 install(TARGETS nucleo_agent_node
@@ -54,7 +54,6 @@ ament_target_dependencies(
   rp_encoder_agent_node
   "rclcpp"
   "std_msgs"
-  mecha_control
 )
 
 install(TARGETS rp_encoder_agent_node
