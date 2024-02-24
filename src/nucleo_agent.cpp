@@ -15,6 +15,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <mutex>
+#include <chrono>
 
 #include "bfcobs2.hpp"
 #include "scheduler.hpp"
@@ -22,21 +23,11 @@
 class SerialPublisherNode : public rclcpp::Node {
 public:
   SerialPublisherNode() : Node("nucleo_agent") {
+    // init parameter
     this->declare_parameter("num_wheels", 4);
-    this->num_wheels = this->get_parameter("num_wheels").as_int();
-    // トピックの初期化
-    publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("motor_speed", 10);
-    if (this->num_wheels == 4) {
-      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
-    } 
-    else if (this->num_wheels == 3) {
-      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
-    }
-    daiza_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
-    daiza_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("daiza_state", 10);
-    hina_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
-    hina_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("hina_state", 10);
-    // パラメータの初期化
+    this->declare_parameter("rate_limit_motor_speed", 0.01);
+    this->declare_parameter("rate_limit_daiza_state", 0.03);
+    this->declare_parameter("rate_limit_hina_state", 0.03);
     this->declare_parameter("gain_motor_4omni", [this]() {
       std::vector<double> gain;
       gain.push_back(160.15962547712672);
@@ -46,31 +37,59 @@ public:
       return gain;
     }()
     );
-    this->declare_parameter("rate_limit_motor_speed", 0.01);
-    this->declare_parameter("rate_limit_daiza_state", 0.03);
-    this->declare_parameter("rate_limit_hina_state", 0.03);
+    // トピックの初期化
+    publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("motor_speed", 10);
+    if (this->get_parameter("num_wheels").as_int() == 4) {
+      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
+    }else if (this->get_parameter("num_wheels").as_int() == 3) {
+      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
+    }else{
+      RCLCPP_ERROR(this->get_logger(), "invalid num_wheels : %d : num_wheel must be 4 or 3", this->get_parameter("num_wheels").as_int());
+      rclcpp::shutdown();
+    }
+    daiza_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
+    daiza_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("daiza_state", 10);
+    hina_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
+    hina_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("hina_state", 10);
 
     RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
 
+    while(!open_serial_port("ttyNucleo") && rclcpp::ok()){
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    // シリアルポートの読み取りを開始
+    startReadingSerial();
+    startReconnectionThread();
+    RCLCPP_INFO(this->get_logger(), "Serial port started");
+  }
+  private:
+
+  // if success return true
+  bool open_serial_port(const std::string &port_search_key) {
     std::vector <std::string> devices;
     int num_devices = 0;
     for(const std::filesystem::directory_entry &i : std::filesystem::recursive_directory_iterator("/dev")){
-        if(i.path().filename().string().find("ttyNucleo") != std::string::npos){
-            std::cout << "device : "<<i.path().filename().string() << std::endl;
+        if(i.path().filename().string().find(port_search_key.c_str()) != std::string::npos){
+            RCLCPP_INFO(this->get_logger(), "device found : /dev/%s", i.path().filename().string().c_str());
             devices.push_back("/dev/" + i.path().filename().string());
             num_devices++;
         }
     }
     if(num_devices == 0){
-        std::cout << "no device" << std::endl;
-        return ;
+        RCLCPP_ERROR(this->get_logger(), "no device found");
+        return false;
+    }
+    if(num_devices > 1){
+        RCLCPP_ERROR(this->get_logger(), "multiple devices found");
+        return false;
     }
     serial_fd = open(devices[0].c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (serial_fd < 0) {
-        std::cout << "open error" << std::endl;
-        return ;
+        RCLCPP_ERROR(this->get_logger(), "open error");
+        return false;
     }
-    std::cout << "open success" << std::endl;
+    RCLCPP_INFO(this->get_logger(), "serial port open success");
 
     struct termios tio;
     tio.c_cflag += CREAD;               // 受信有効
@@ -84,12 +103,27 @@ public:
     tcsetattr( serial_fd, TCSANOW, &tio );     // デバイスに設定を行う
     ioctl(serial_fd, TCSETS, &tio);            // ポートの設定を有効にする
 
-
-    // シリアルポートの読み取りを開始
-    startReadingSerial();
-    RCLCPP_INFO(this->get_logger(), "Serial port started");
+    // clear read buffer
+    tcflush(serial_fd, TCIFLUSH);
+    return true;
   }
-  private:
+
+  void startReconnectionThread(){
+    reconection_thread_ = std::thread([this]() {
+      while (rclcpp::ok()) {
+        if(reconnection_flag_.load()){
+          RCLCPP_INFO(this->get_logger(), "reconnection start");
+          while(!open_serial_port("ttyNucleo") && rclcpp::ok()){
+            rclcpp::sleep_for(std::chrono::milliseconds(500));
+          }
+          reconnection_flag_.store(false);
+          RCLCPP_INFO(this->get_logger(), "reconnection success");
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(200));
+      }
+    });
+  }
+
   void startReadingSerial() {
     // 非同期にシリアルポートの読み取りを行う
     serial_thread_ = std::thread([this]() {
@@ -103,6 +137,7 @@ public:
       while (rclcpp::ok()) {
         char buffer[256];
         ssize_t len = read(this->serial_fd, buffer, sizeof(buffer));
+        if(len < 0) reconnection_flag_.store(true);
         if (len > 0) {
           // データを処理する部分
           for (size_t i = 0; i < len; i++)
@@ -204,7 +239,9 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      auto write_return = write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      if(write_return < 0) reconnection_flag_.store(true);
+      // RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write_return);
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -224,7 +261,9 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      auto write_return = write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      if(write_return < 0) reconnection_flag_.store(true);
+      // RCLCPP_INFO(this->get_logger(), "motor write return : %ld", write_return);
 
       // RCLCPP_INFO(this->get_logger(), "motor_3omni message received : %f, %f, %f", msg->data[0], msg->data[1], msg->data[2]);
     }else{
@@ -266,8 +305,10 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "daiza write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
-      RCLCPP_INFO(this->get_logger(), "daiza write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
+      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      auto write_return = write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      if(write_return < 0) reconnection_flag_.store(true);
+      RCLCPP_INFO(this->get_logger(), "daiza write return : %ld", write_return);
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 4, 0, 0) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
@@ -303,8 +344,10 @@ public:
       
       auto encoded_data = cobs_encode(send_data);
 
-      RCLCPP_INFO(this->get_logger(), "hina write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size()));
-      RCLCPP_INFO(this->get_logger(), "hina write return : %ld", write(this->serial_fd, encoded_data.data(), encoded_data.size())); 
+      write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      auto write_return = write(this->serial_fd, encoded_data.data(), encoded_data.size());
+      if(write_return < 0) reconnection_flag_.store(true);
+      RCLCPP_INFO(this->get_logger(), "hina write return : %ld", write_return);
     }else{
       RCLCPP_INFO(this->get_logger(), "invalid daiza_clamp message length (must be 2, 1, 3) : %ld, %ld, %ld", msg->cylinder_states.size(), msg->motor_expand.size(), msg->motor_positions.size());
     }
@@ -317,10 +360,11 @@ public:
   rclcpp::Subscription<nucleo_agent::msg::ActuatorCommands>::SharedPtr hina_cmd_sub_;
   rclcpp::Publisher<nucleo_agent::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
   std::thread serial_thread_;
+  std::thread reconection_thread_;
+  mutable std::atomic<bool> reconnection_flag_ = false;
   int serial_fd;
   mutable std::array<uint8_t, 2> daiza_last_send_data;
   mutable std::array<uint8_t, 6> hina_last_send_data;
-  int num_wheels;
 };
 
 int main(int argc, char *argv[]) {

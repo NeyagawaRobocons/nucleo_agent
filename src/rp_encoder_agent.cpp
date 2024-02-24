@@ -21,36 +21,45 @@ public:
   SerialPublisherNode() : Node("rp_encoder_agent") {
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
-    // パラメータの初期化
-    this->declare_parameter("gain_motor_3omni", [this]() {
-      std::vector<double> gain;
-      gain.push_back(160.15962547712672);
-      gain.push_back(160.15962547712672);
-      gain.push_back(160.15962547712672);
-      return gain;
-    }()
-    );
+
     RCLCPP_INFO(this->get_logger(), "rp encoder agent node started");
 
+    while(!open_serial_port("ttyrppico") && rclcpp::ok()){
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    // シリアルポートの読み取りを開始
+    startReadingSerial();
+    startReconnectionThread();
+    RCLCPP_INFO(this->get_logger(), "Serial port started");
+  }
+  private:
+
+  // if success return true
+  bool open_serial_port(const std::string &port_search_key) {
     std::vector <std::string> devices;
     int num_devices = 0;
     for(const std::filesystem::directory_entry &i : std::filesystem::recursive_directory_iterator("/dev")){
-        if(i.path().filename().string().find("ttyrppico") != std::string::npos){
-            std::cout << "device : "<<i.path().filename().string() << std::endl;
+        if(i.path().filename().string().find(port_search_key.c_str()) != std::string::npos){
+            RCLCPP_INFO(this->get_logger(), "device found : /dev/%s", i.path().filename().string().c_str());
             devices.push_back("/dev/" + i.path().filename().string());
             num_devices++;
         }
     }
     if(num_devices == 0){
-        std::cout << "no device" << std::endl;
-        return ;
+        RCLCPP_ERROR(this->get_logger(), "no device found");
+        return false;
+    }
+    if(num_devices > 1){
+        RCLCPP_ERROR(this->get_logger(), "multiple devices found");
+        return false;
     }
     serial_fd = open(devices[0].c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (serial_fd < 0) {
-        std::cout << "open error" << std::endl;
-        return ;
+        RCLCPP_ERROR(this->get_logger(), "open error");
+        return false;
     }
-    std::cout << "open success" << std::endl;
+    RCLCPP_INFO(this->get_logger(), "serial port open success");
 
     struct termios tio;
     tio.c_cflag += CREAD;               // 受信有効
@@ -64,12 +73,28 @@ public:
     tcsetattr( serial_fd, TCSANOW, &tio );     // デバイスに設定を行う
     ioctl(serial_fd, TCSETS, &tio);            // ポートの設定を有効にする
 
-
-    // シリアルポートの読み取りを開始
-    startReadingSerial();
-    RCLCPP_INFO(this->get_logger(), "Serial port started");
+    // clear read buffer
+    tcflush(serial_fd, TCIFLUSH);
+    return true;
   }
-  private:
+
+  void startReconnectionThread(){
+    reconection_thread_ = std::thread([this]() {
+      while (rclcpp::ok()) {
+        if(reconnection_flag_){
+          RCLCPP_INFO(this->get_logger(), "reconnection start");
+          while(!open_serial_port("ttyNucleo") && rclcpp::ok()){
+            rclcpp::sleep_for(std::chrono::milliseconds(500));
+          }
+          reconnection_flag_ = false;
+          RCLCPP_INFO(this->get_logger(), "reconnection success");
+        }
+        rclcpp::sleep_for(std::chrono::milliseconds(200));
+      }
+    });
+  }
+
+
   void startReadingSerial() {
     // 非同期にシリアルポートの読み取りを行う
     serial_thread_ = std::thread([this]() {
@@ -124,6 +149,8 @@ public:
 
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
   std::thread serial_thread_;
+  std::thread reconection_thread_;
+  std::atomic<bool> reconnection_flag_ = false;
   int serial_fd;
   mutable std::array<uint8_t, 2> daiza_last_send_data;
   mutable std::array<uint8_t, 6> hina_last_send_data;
