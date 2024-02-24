@@ -22,9 +22,16 @@
 class SerialPublisherNode : public rclcpp::Node {
 public:
   SerialPublisherNode() : Node("nucleo_agent") {
+    this->declare_parameter("num_wheels", 4);
+    this->num_wheels = this->get_parameter("num_wheels").as_int();
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("motor_speed", 10);
-    motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
+    if (this->num_wheels == 4) {
+      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_4omni_callback, this, std::placeholders::_1));
+    } 
+    else if (this->num_wheels == 3) {
+      motor_subscriber_ = create_subscription<std_msgs::msg::Float64MultiArray>("input_vel", 10, std::bind(&SerialPublisherNode::motor_3omni_callback, this, std::placeholders::_1));
+    }
     daiza_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("daiza_clamp", 10, std::bind(&SerialPublisherNode::daiza_cmd_callback, this, std::placeholders::_1));
     daiza_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("daiza_state", 10);
     hina_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
@@ -313,6 +320,7 @@ public:
   int serial_fd;
   mutable std::array<uint8_t, 2> daiza_last_send_data;
   mutable std::array<uint8_t, 6> hina_last_send_data;
+  int num_wheels;
 };
 
 int main(int argc, char *argv[]) {
