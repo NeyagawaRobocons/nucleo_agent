@@ -41,7 +41,7 @@ jobs:
       - name: Run package.xml version set script
         run: |
           sudo apt install lua5.4
-          lua ./scripts/set_version.lua /ros_ws/src/nucleo_agent/package.xml ${{ steps.tag_version.outputs.new_version }}
+          lua ./scripts/set_version.lua ./package.xml ${{ steps.tag_version.outputs.new_version }}
           git config user.name  "actions-user"
           git config user.email "action@github.com"
           git add ./package.xml
