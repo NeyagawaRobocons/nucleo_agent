@@ -93,9 +93,9 @@ public:
   void startReadingSerial() {
     // 非同期にシリアルポートの読み取りを行う
     serial_thread_ = std::thread([this]() {
-      Scheduler motor_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_motor_speed").as_double() * 1e9));
-      Scheduler daiza_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_daiza_state").as_double() * 1e9));
-      Scheduler hina_pub_scheduler(rclcpp::Time(this->get_parameter("rate_limit_hina_state").as_double() * 1e9));
+      Scheduler motor_pub_scheduler(rclcpp::Duration::from_seconds(this->get_parameter("rate_limit_motor_speed").as_double()));
+      Scheduler daiza_pub_scheduler(rclcpp::Duration::from_seconds(this->get_parameter("rate_limit_daiza_state").as_double()));
+      Scheduler hina_pub_scheduler(rclcpp::Duration::from_seconds(this->get_parameter("rate_limit_hina_state").as_double()));
       int count = 0;
       bfcobs<256> cobs;
       // clear read buffer
