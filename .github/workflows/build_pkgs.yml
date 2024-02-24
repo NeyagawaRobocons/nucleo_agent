@@ -5,6 +5,10 @@ on:
   workflow_dispatch:
   push:
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   CI_check:
     runs-on: ubuntu-latest
