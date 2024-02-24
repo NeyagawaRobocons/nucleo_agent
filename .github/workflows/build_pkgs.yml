@@ -16,8 +16,8 @@ jobs:
           docker pull ghcr.io/neyagawarobocons/robo_env_container:latest
       - name: colcon build
         run: |
-          docker run --workdir=/ROS_ws \
-          --volume=.:/ROS_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
+          docker run --workdir=/ros_ws \
+          --volume=.:/ros_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
           bash -c ". /opt/ros/humble/setup.bash \
           && colcon build"
   build_deb_pkg:
@@ -29,11 +29,43 @@ jobs:
       - name: pull container
         run: |
           docker pull ghcr.io/neyagawarobocons/robo_env_container:latest
-      - name: colcon build
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run package.xml version set script
         run: |
-          docker run --workdir=/ROS_ws \
-          --volume=.:/ROS_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
+          sudo apt install lua5.4
+          lua ./scripts/set_version.lua ${{ steps.tag_version.outputs.new_version }}
+          git config user.name  "actions-user"
+          git config user.email "action@github.com"
+          git add ./package.xml
+          git commit -m "Bump version to ${{ steps.tag_version.outputs.new_version }}"
+          git push
+      - name: build
+        run: |
+          docker run --workdir=/ros_ws \
+          --volume=.:/ros_ws/src/nucleo_agent ghcr.io/neyagawarobocons/robo_env_container:latest \
           bash -c ". /opt/ros/humble/setup.bash \
-          && cd /ROS_ws/src/nucleo_agent \
+          && cd /ros_ws/src/nucleo_agent \
           && bloom-generate rosdebian \
-          && fakeroot debian/rules binary"
+          && fakeroot debian/rules binary \
+          && cp /ros_ws/src/ros-humble-nucleo-agent_${{steps.tag_version.outputs.new_version}}-0jammy_amd64.deb /ros_ws/src/nucleo_agent/"
+      - name: Create release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ros-humble-nucleo-agent_${{steps.tag_version.outputs.new_version}}-0jammy_amd64.deb
+          asset_name: ros-humble-nucleo-agent_${{steps.tag_version.outputs.new_version}}-0jammy_amd64.deb
+          asset_content_type: package/deb
