@@ -83,13 +83,13 @@ public:
       while (rclcpp::ok()) {
         std::array<uint8_t, 1> dummy_data = {0x00};
         int len = write(this->serial_fd, dummy_data.data(), dummy_data.size());
-        if(len < 0) reconnection_flag_ = true;          
-        if(reconnection_flag_){
+        if(len < 0) reconnection_flag_.store(true);
+        if(reconnection_flag_.load()){
           RCLCPP_INFO(this->get_logger(), "reconnection start");
-          while(!open_serial_port("rp_encoder_agent") && rclcpp::ok()){
+          while(!open_serial_port("ttyrppico") && rclcpp::ok()){
             rclcpp::sleep_for(std::chrono::milliseconds(500));
           }
-          reconnection_flag_ = false;
+          reconnection_flag_.store(false);
           RCLCPP_INFO(this->get_logger(), "reconnection success");
         }
         rclcpp::sleep_for(std::chrono::milliseconds(200));
@@ -153,7 +153,7 @@ public:
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
   std::thread serial_thread_;
   std::thread reconection_thread_;
-  std::atomic<bool> reconnection_flag_ = false;
+  mutable std::atomic<bool> reconnection_flag_ = false;
   int serial_fd;
   mutable std::array<uint8_t, 2> daiza_last_send_data;
   mutable std::array<uint8_t, 6> hina_last_send_data;
