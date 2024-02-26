@@ -81,9 +81,12 @@ public:
   void startReconnectionThread(){
     reconection_thread_ = std::thread([this]() {
       while (rclcpp::ok()) {
+        std::array<uint8_t, 1> dummy_data = {0x00};
+        int len = write(this->serial_fd, dummy_data.data(), dummy_data.size());
+        if(len < 0) reconnection_flag_ = true;          
         if(reconnection_flag_){
           RCLCPP_INFO(this->get_logger(), "reconnection start");
-          while(!open_serial_port("ttyNucleo") && rclcpp::ok()){
+          while(!open_serial_port("rp_encoder_agent") && rclcpp::ok()){
             rclcpp::sleep_for(std::chrono::milliseconds(500));
           }
           reconnection_flag_ = false;
@@ -118,7 +121,7 @@ public:
                 continue;
               }
               if(size == 25)if(data[0] == 0x01){
-                RCLCPP_INFO(this->get_logger(), "OdometerData received");
+                // RCLCPP_INFO(this->get_logger(), "OdometerData received");
                 auto message = nucleo_agent::msg::OdometerData();
                 for (size_t i = 0; i < 3; i++)
                 {
@@ -135,8 +138,8 @@ public:
                 message.header.stamp = this->now();
                 message.header.frame_id = "odom_omni_3wheel";
                 publisher_->publish(message);
-                RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
-                RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
+                // RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
+                // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
               }
             }
           }

@@ -137,7 +137,7 @@ public:
       while (rclcpp::ok()) {
         char buffer[256];
         ssize_t len = read(this->serial_fd, buffer, sizeof(buffer));
-        if(len < 0) reconnection_flag_.store(true);
+        // if(len < 0) reconnection_flag_.store(true);
         if (len > 0) {
           // データを処理する部分
           for (size_t i = 0; i < len; i++)
