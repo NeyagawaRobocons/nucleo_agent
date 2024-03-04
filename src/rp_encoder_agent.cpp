@@ -2,6 +2,7 @@
 #include "nucleo_agent/msg/odometer_data.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
+#include "std_msgs/msg/byte_multi_array.hpp"
 #include <iostream>
 #include <filesystem>
 #include <thread>
@@ -21,6 +22,7 @@ public:
   SerialPublisherNode() : Node("rp_encoder_agent") {
     // トピックの初期化
     publisher_ = create_publisher<nucleo_agent::msg::OdometerData>("odometer_3wheel", 10);
+    switches_pub_ = create_publisher<std_msgs::msg::ByteMultiArray>("control_switches", 10);
 
     RCLCPP_INFO(this->get_logger(), "rp encoder agent node started");
 
@@ -141,6 +143,13 @@ public:
                 // RCLCPP_INFO(this->get_logger(), "OdometerData rotation : %f, %f, %f", message.rotation[0], message.rotation[1], message.rotation[2]);
                 // RCLCPP_INFO(this->get_logger(), "OdometerData angular_vel : %f, %f, %f", message.angular_vel[0], message.angular_vel[1], message.angular_vel[2]);
               }
+              if(size == 2)if(data[0] == 0x02){
+                auto message = std_msgs::msg::ByteMultiArray();
+                for(size_t i = 0; i < 4; i++){
+                  message.data.push_back((data[1] >> i) & 0x01);
+                  switches_pub_->publish(message);
+                }
+              }
             }
           }
         } else if (len < 0) {
@@ -151,6 +160,7 @@ public:
   }
 
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
+  rclcpp::Publisher<std_msgs::msg::ByteMultiArray>::SharedPtr switches_pub_;
   std::thread serial_thread_;
   std::thread reconection_thread_;
   mutable std::atomic<bool> reconnection_flag_ = false;

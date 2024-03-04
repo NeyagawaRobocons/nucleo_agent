@@ -4,6 +4,7 @@
 #include "nucleo_agent/msg/sensor_states.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include <iostream>
 #include <filesystem>
 #include <thread>
@@ -51,6 +52,7 @@ public:
     daiza_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("daiza_state", 10);
     hina_cmd_sub_ = create_subscription<nucleo_agent::msg::ActuatorCommands>("hina_dastpan", 10, std::bind(&SerialPublisherNode::hina_cmd_callback, this, std::placeholders::_1));
     hina_sennsor_pub_ = create_publisher<nucleo_agent::msg::SensorStates>("hina_state", 10);
+    bonbori_cmd_sub_ = create_subscription<std_msgs::msg::Bool>("bonbori_msg", 10, std::bind(&SerialPublisherNode::bonbori_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "nucleo_agent Node started");
 
@@ -353,12 +355,24 @@ public:
     }
   }
 
+  void bonbori_callback(const std_msgs::msg::Bool::SharedPtr msg) const {
+    std::array<uint8_t, 2> send_data;
+    send_data[0] = 0x04;
+    send_data[1] = msg->data;
+    auto encoded_data = cobs_encode(send_data);
+    write(this->serial_fd, encoded_data.data(), encoded_data.size());
+    auto write_return = write(this->serial_fd, encoded_data.data(), encoded_data.size());
+    if(write_return < 0) reconnection_flag_.store(true);
+    RCLCPP_INFO(this->get_logger(), "bonbori write return : %ld", write_return);
+  }
+
   rclcpp::Publisher<nucleo_agent::msg::OdometerData>::SharedPtr publisher_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr motor_subscriber_;
   rclcpp::Subscription<nucleo_agent::msg::ActuatorCommands>::SharedPtr daiza_cmd_sub_;
   rclcpp::Publisher<nucleo_agent::msg::SensorStates>::SharedPtr daiza_sennsor_pub_;
   rclcpp::Subscription<nucleo_agent::msg::ActuatorCommands>::SharedPtr hina_cmd_sub_;
   rclcpp::Publisher<nucleo_agent::msg::SensorStates>::SharedPtr hina_sennsor_pub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr bonbori_cmd_sub_;
   std::thread serial_thread_;
   std::thread reconection_thread_;
   mutable std::atomic<bool> reconnection_flag_ = false;
