@@ -147,8 +147,8 @@ public:
                 auto message = std_msgs::msg::ByteMultiArray();
                 for(size_t i = 0; i < 4; i++){
                   message.data.push_back((data[1] >> i) & 0x01);
-                  switches_pub_->publish(message);
                 }
+                switches_pub_->publish(message);
               }
             }
           }
